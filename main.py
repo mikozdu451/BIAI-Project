@@ -8,6 +8,7 @@ import easyocr
 from PIL import Image
 import tensorflow as tf
 import pydot
+from difflib import SequenceMatcher
 
 
 from keras.models import load_model, model_from_json
@@ -109,9 +110,9 @@ def segment_characters(image) :
 def preprocessing(num, plate_was_found):
     plt.style.use('dark_background')
     if plate_was_found:
-        img_ori = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/licensePlates/plates/Plate' + num + '.png')
+        img_ori = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/Media/Plates/Car_' + str(num) + '.jpg')
     else:
-        img_ori = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/licensePlates/images/Cars' + num + '.png')
+        img_ori = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/Media/Images/Car_' + str(num) + '.jpg')
     height, width, channel = img_ori.shape
     #print(height, width, channel)
 
@@ -232,6 +233,8 @@ def preprocessing(num, plate_was_found):
     MAX_WIDTH_DIFF = 0.8
     MAX_HEIGHT_DIFF = 0.2
     MIN_N_MATCHED = 3 # 3
+
+    plt.close('all')
 
     def find_chars(contour_list):
         matched_result_idx = []
@@ -471,7 +474,7 @@ def load_keras_model(model_name):
 
 
 def find_plate(num):
-    img = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/licensePlates/images/Cars' + str(num) + '.png')
+    img = cv2.imread('C:/Users/pumpk/Desktop/git/BIAI/Media/Images/Car_' + str(num) + '.jpg')
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     plt.imshow(cv2.cvtColor(gray, cv2.COLOR_BGR2RGB))
 
@@ -504,76 +507,51 @@ def find_plate(num):
         #plt.show()
         plt.imshow(new_image, cmap='gray')
         plt.axis('off')
-        plt.savefig('C:/Users/pumpk/Desktop/git/BIAI/licensePlates/plates/Plate' + num + '.png')
+        plt.savefig('C:/Users/pumpk/Desktop/git/BIAI/Media/Plate/Car_' + str(num) + '.jpg')
         return True
     except:
         print("Plate not found")
         return False
 
 
-loss = []
-custom_f1score = []
-val_loss = []
-val_custom_f1score = []
-val = []
+global_success = 0
+global_fail = 0
 
-f = open('dataForGraphModel3.txt', 'r')
-text = f.read().split('\n')
-text.pop()
-#print(text)
-for line in text:
-    loss.append(float(line.split()[0])/10)
-    custom_f1score.append(float(line.split()[1]))
-    val_loss.append(float(line.split()[2])/10)
-    val_custom_f1score.append(float(line.split()[3]))
-
-for i in range(80):
-    val.append(i + 1)
+pre_trained_model = load_keras_model('model_LicensePlate5')
+model = pre_trained_model
 
 
-print(max(custom_f1score))
-print(min(loss))
+textFromPlate = open('C:/Users/pumpk/Desktop/git/BIAI/Media/Cars plates.txt', 'r')
+textFromPlateArray = textFromPlate.readlines()
+print(textFromPlateArray)
+textFromPlate.close()
+f = open('model5_readPlates.txt', 'w')
+global_ratio = 0
+#pic_num = 17
+for pic_num in range(76):
 
-x = val
-y = loss
+    isPlate = find_plate(str(pic_num+1))
 
+    try:
+        results_preprocessing = preprocessing(str(pic_num+1), isPlate)
+        foundPlate = show_results(results_preprocessing[0], results_preprocessing[1], model)
+        global_success += 1
 
-plt.plot(val, loss)
-plt.plot(val, custom_f1score)
-plt.plot(val, val_loss)
-plt.plot(val, val_custom_f1score)
-plt.legend(['Loss', 'custom_f1score', 'val_loss', 'val_custom_f1score'])
+        print("Found plate: ", foundPlate, ", Actual plate: ", textFromPlateArray[pic_num].replace('\n', ''))
+        match_ratio = SequenceMatcher(None, textFromPlateArray[pic_num].replace('\n', ''), foundPlate).ratio()
+        f.write(foundPlate + ' ' + str(match_ratio) + '\n')
+        print("Match ratio: ", match_ratio)
+        global_ratio += match_ratio
+    except:
+        global_fail += 1
 
-plt.savefig('graphModel3.png')
-plt.show()
+    print("Success: " + str(global_success) + " Fail: " + str(global_fail))
+    print("Current global ratio: ", global_ratio/(pic_num + 1))
 
-# global_success = 0
-# global_fail = 0
-#
-# pre_trained_model = load_keras_model('model_LicensePlate')
-# model = pre_trained_model
-#
-# pic_num = 0
-# #for pic_num in range(432):
-# isPlate = find_plate(str(pic_num))
-# #if isPlate:
-#     #print(pre_trained_model.summary())
-# try:
-#     print("Found plate")
-#     results_preprocessing = preprocessing(str(pic_num), True)
-#     print(show_results(results_preprocessing[0], results_preprocessing[1], model))
-#
-#
-#     global_success += 1
-# except:
-#     global_fail += 1
-#     #else:
-#     #    global_fail += 1
-#
-# print("Success: " + str(global_success) + " Fail: " + str(global_fail))
-# #results_preprocessing[1].show()
-#
-#
-# #print("Plates found: " + str(global_success) + ", plates not found: " + str(global_fail))
+global_ratio /= 76
+print("Global match ratio: ", global_ratio)
+f.write(str(global_ratio))
+f.close()
+
 
 
